@@ -11,8 +11,19 @@
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 import { Account, Transaction } from '../types/finance';
 import { formatDate, formatTime, formatPKR } from './accounting';
+
+export interface PDFExportResult {
+  success: boolean;
+  fileName: string;
+  method: 'download' | 'share' | 'saved_to_documents';
+  message: string;
+  uri?: string;
+}
 
 export interface PDFReportOptions {
   periodLabel: string;
@@ -51,7 +62,7 @@ export interface PDFReportOptions {
   currency?: string;
 }
 
-export async function exportFinancialReportPDF(options: PDFReportOptions): Promise<string> {
+export async function exportFinancialReportPDF(options: PDFReportOptions): Promise<PDFExportResult> {
   const {
     periodLabel,
     startDate,
@@ -518,19 +529,160 @@ export async function exportFinancialReportPDF(options: PDFReportOptions): Promi
     });
   }
 
-  // 8. Generate sanitized filename
-  // E.g. Sattar_Auto_Financial_Report_2026-10-08.pdf or Sattar_Auto_Financial_Report_2026-10-01_to_2026-10-08.pdf
-  let filenameDateSuffix = generatedDateStr.replace(/ /g, '_');
-  if (startDate && endDate) {
-    filenameDateSuffix = `${startDate}_to_${endDate}`;
-  } else if (periodLabel) {
-    filenameDateSuffix = `${periodLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${generatedDateStr.replace(/ /g, '_')}`;
+  // 8. Meaningful filename (Requirement 7)
+  // Format: Sattar_Finance_Report_<date_or_period>.pdf
+  // e.g., Sattar_Finance_Report_2026-10-09.pdf
+  const karachiDateIso = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' }); // YYYY-MM-DD
+  let filenameSuffix = '';
+
+  if (startDate && endDate && startDate !== endDate) {
+    filenameSuffix = `${startDate}_to_${endDate}`;
+  } else if (startDate) {
+    filenameSuffix = startDate;
+  } else if (periodLabel && periodLabel !== 'All Time' && periodLabel !== 'Custom Period') {
+    const cleanLabel = periodLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    filenameSuffix = `${cleanLabel}_${karachiDateIso}`;
+  } else {
+    filenameSuffix = karachiDateIso;
   }
 
-  const sanitizedFileName = `Sattar_Auto_Financial_Report_${filenameDateSuffix}.pdf`;
+  const sanitizedFileName = `Sattar_Finance_Report_${filenameSuffix}.pdf`;
 
-  // 9. Save / Download
-  doc.save(sanitizedFileName);
+  // 9. Platform-Aware Native File Export (Requirements 4, 5, 6, 8, 9, 10)
+  if (Capacitor.isNativePlatform()) {
+    // Android (Capacitor) Native Execution
+    try {
+      const dataUri = doc.output('datauristring');
+      const base64Data = dataUri.split(',')[1];
 
-  return sanitizedFileName;
+      if (!base64Data) {
+        throw new Error('Failed to generate binary PDF data.');
+      }
+
+      // Check / request storage permissions if applicable
+      try {
+        const perm = await Filesystem.checkPermissions();
+        if (perm.publicStorage === 'prompt' || perm.publicStorage === 'prompt-with-rationale') {
+          await Filesystem.requestPermissions();
+        }
+      } catch (permErr) {
+        console.warn('Storage permission check notice:', permErr);
+      }
+
+      // 1. Write to Cache first (guaranteed FileProvider compatible for Sharing and Opening)
+      let fileUri: string | undefined;
+      const cacheResult = await Filesystem.writeFile({
+        path: sanitizedFileName,
+        data: base64Data,
+        directory: Directory.Cache,
+        recursive: true,
+      });
+      fileUri = cacheResult.uri;
+
+      // 2. Also write to Documents directory (respects scoped storage)
+      let savedToDocuments = false;
+      try {
+        const docResult = await Filesystem.writeFile({
+          path: sanitizedFileName,
+          data: base64Data,
+          directory: Directory.Documents,
+          recursive: true,
+        });
+        if (docResult && docResult.uri) {
+          savedToDocuments = true;
+          fileUri = docResult.uri;
+        }
+      } catch (docErr) {
+        console.warn('Documents directory write notice:', docErr);
+      }
+
+      // 3. Native Share / Save Action (Requirements 5 & 6)
+      // Opens Android native system save/share sheet allowing user to save directly to
+      // Downloads, Drive, Files, or open in PDF viewer
+      try {
+        await Share.share({
+          title: 'Sattar Finance Report',
+          text: `Financial Report: ${sanitizedFileName}`,
+          url: fileUri,
+          dialogTitle: 'Save or Share PDF Report',
+        });
+
+        return {
+          success: true,
+          fileName: sanitizedFileName,
+          method: 'share',
+          message: 'Choose where to save your PDF (e.g. Downloads or Drive).',
+          uri: fileUri,
+        };
+      } catch (shareErr: any) {
+        // If user cancelled or dismissed the share dialog
+        if (
+          shareErr.message &&
+          (shareErr.message.includes('cancel') ||
+            shareErr.message.includes('dismiss') ||
+            shareErr.message.includes('Canceled'))
+        ) {
+          return {
+            success: true,
+            fileName: sanitizedFileName,
+            method: savedToDocuments ? 'saved_to_documents' : 'share',
+            message: savedToDocuments
+              ? `PDF saved successfully to Documents (${sanitizedFileName}).`
+              : `PDF generated (${sanitizedFileName}).`,
+            uri: fileUri,
+          };
+        }
+
+        if (savedToDocuments) {
+          return {
+            success: true,
+            fileName: sanitizedFileName,
+            method: 'saved_to_documents',
+            message: `PDF saved successfully to Documents (${sanitizedFileName}).`,
+            uri: fileUri,
+          };
+        }
+
+        throw shareErr;
+      }
+    } catch (nativeErr: any) {
+      console.error('Android native export error:', nativeErr);
+      throw new Error(`Android file save failed: ${nativeErr.message || 'Storage error'}`);
+    }
+  } else {
+    // Web / GitHub Pages Browser Download (Requirement 8)
+    try {
+      const blob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = blobUrl;
+      downloadLink.download = sanitizedFileName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      // Clean up object URL after small timeout
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+      return {
+        success: true,
+        fileName: sanitizedFileName,
+        method: 'download',
+        message: `PDF saved successfully (${sanitizedFileName}).`,
+        uri: blobUrl,
+      };
+    } catch (webErr: any) {
+      console.error('Web browser PDF download error:', webErr);
+      // Fallback to doc.save if in browser
+      if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+        doc.save(sanitizedFileName);
+      }
+      return {
+        success: true,
+        fileName: sanitizedFileName,
+        method: 'download',
+        message: `PDF downloaded successfully (${sanitizedFileName}).`,
+      };
+    }
+  }
 }

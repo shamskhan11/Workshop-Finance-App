@@ -127,7 +127,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     setExportFeedback(null);
 
     try {
-      const fileName = await exportFinancialReportPDF({
+      const result = await exportFinancialReportPDF({
         periodLabel: getPeriodLabel(),
         startDate: period === 'custom' ? customStart : undefined,
         endDate: period === 'custom' ? customEnd : undefined,
@@ -145,16 +145,15 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         currency: 'PKR',
       });
 
-      const successMsg = `Financial report exported successfully (${fileName})`;
-      setExportFeedback({ type: 'success', message: successMsg });
-      if (onShowToast) onShowToast(successMsg);
-      setTimeout(() => setExportFeedback(null), 5000);
+      setExportFeedback({ type: 'success', message: result.message });
+      if (onShowToast) onShowToast(result.message);
+      setTimeout(() => setExportFeedback(null), 6000);
     } catch (err: any) {
       console.error('PDF export error:', err);
       const errMsg = `Failed to generate PDF: ${err.message || 'Unknown error'}`;
       setExportFeedback({ type: 'error', message: errMsg });
       if (onShowToast) onShowToast(errMsg);
-      setTimeout(() => setExportFeedback(null), 5000);
+      setTimeout(() => setExportFeedback(null), 6000);
     } finally {
       setIsExporting(false);
     }
