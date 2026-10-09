@@ -132,8 +132,21 @@ export interface CreateTransactionPayload {
   amount: number;
   account: string;
   accountId?: string;
+  accountName?: string;
+  fromAccount?: string;
+  fromAccountId?: string;
+  sourceAccount?: string;
+  sourceAccountId?: string;
   toAccount?: string;
   toAccountId?: string;
+  toAccountName?: string;
+  destinationAccount?: string;
+  destinationAccountId?: string;
+  transferToAccount?: string;
+  transferToAccountId?: string;
+  transferToAccountName?: string;
+  destination?: string;
+  transferTo?: string;
   payee?: string;
   customer?: string;
   customerId?: string;
@@ -142,4 +155,33 @@ export interface CreateTransactionPayload {
   paymentMethod: string;
   reference?: string;
   description?: string;
+  createdByUser?: string;
+  createdByRole?: string;
+}
+
+export type UserRole = 'ADMIN' | 'STAFF' | 'VIEWER';
+
+export interface User {
+  id: string;
+  username: string;
+  name: string;
+  role: UserRole;
+  pin?: string;
+  phone?: string;
+  email?: string;
+  active: boolean;
+  createdAt?: string;
+  lastLoginAt?: string;
+}
+
+export interface AuthSession {
+  user: User;
+  token: string;
+  loginTime: string;
+}
+
+export interface AmountValidationResult {
+  isValid: boolean;
+  error?: string;
+  cleanAmount?: number;
 }

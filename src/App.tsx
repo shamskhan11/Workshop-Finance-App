@@ -13,9 +13,11 @@ import {
   PeriodFilter,
   Transaction,
   TransactionType,
+  User,
   Vehicle,
 } from './types/finance';
 import { ApiService } from './services/apiService';
+import { AuthService } from './services/authService';
 import {
   calculateAccountBalances,
   calculateTotals,
@@ -36,12 +38,20 @@ import { ReportsView } from './components/ReportsView';
 import { MoreView } from './components/MoreView';
 import { AddTransactionModal } from './components/AddTransactionModal';
 import { BackendStatusModal } from './components/BackendStatusModal';
+import { LoginView } from './components/LoginView';
+import { AdminManagementModal } from './components/AdminManagementModal';
 import { CheckCircle2, ShieldAlert } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
 export default function App() {
+  // Authentication & Current User State (Section C)
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    return AuthService.getCurrentSession()?.user || null;
+  });
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
   // Navigation
   const [currentTab, setCurrentTab] = useState<TabType>('dashboard');
 
@@ -246,6 +256,11 @@ export default function App() {
 
   // Void transaction handler
   const handleVoidTransaction = async (id: string, reason: string) => {
+    if (!AuthService.canVoidTransactions(currentUser)) {
+      showToast('Permission denied: Only Administrators and authorized Staff can void transactions.');
+      return;
+    }
+
     try {
       await ApiService.voidTransaction(id, reason);
       showToast('Transaction voided successfully. Balances updated.');
@@ -254,6 +269,24 @@ export default function App() {
       showToast(`Void failed: ${err.message}`);
       throw err;
     }
+  };
+
+  const handleLogout = () => {
+    AuthService.logout();
+    setCurrentUser(null);
+    showToast('Logged out securely.');
+  };
+
+  const handleExportBackup = () => {
+    AuthService.createBackupJson({
+      accounts: computedAccounts,
+      transactions,
+      categories: allCategories,
+      customers,
+      vehicles,
+      users: AuthService.getUsers(),
+    });
+    showToast('Financial backup created and downloaded successfully.');
   };
 
   const handleOpenAddModal = (type: TransactionType = 'IN') => {
@@ -269,6 +302,18 @@ export default function App() {
   const allCategories = useMemo(() => {
     return [...incomeCategories, ...expenseCategories];
   }, [incomeCategories, expenseCategories]);
+
+  // Enforce secure authentication gate: Do not expose financial data to unauthenticated users (Section C)
+  if (!currentUser) {
+    return (
+      <LoginView
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          showToast(`Welcome back, ${user.name}`);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
@@ -286,6 +331,9 @@ export default function App() {
         isLoading={isLoading}
         onRefreshAll={loadData}
         onOpenBackendModal={() => setIsBackendModalOpen(true)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onOpenAdminModal={() => setIsAdminModalOpen(true)}
       />
 
       {/* PWA Install Banner */}
@@ -373,6 +421,10 @@ export default function App() {
             incomeCategories={incomeCategories}
             expenseCategories={expenseCategories}
             onOpenBackendModal={() => setIsBackendModalOpen(true)}
+            currentUser={currentUser}
+            onLogout={handleLogout}
+            onOpenAdminModal={() => setIsAdminModalOpen(true)}
+            onExportBackup={handleExportBackup}
           />
         )}
       </main>
@@ -407,6 +459,21 @@ export default function App() {
         health={health}
         isLoading={isLoading}
         onRefreshHealth={loadData}
+      />
+
+      {/* Administrator & User Management Modal (Section C) */}
+      <AdminManagementModal
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        currentUser={currentUser}
+        onShowToast={showToast}
+        allFinancialData={{
+          accounts: computedAccounts,
+          transactions,
+          categories: allCategories,
+          customers,
+          vehicles,
+        }}
       />
     </div>
   );

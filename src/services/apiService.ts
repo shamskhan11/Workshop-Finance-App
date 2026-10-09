@@ -12,8 +12,10 @@ import {
   Customer,
   DashboardData,
   Transaction,
+  User,
   Vehicle,
 } from '../types/finance';
+import { validateTransactionAmount } from '../utils/validation';
 
 export const DEFAULT_GAS_API_URL =
   'https://script.google.com/macros/s/AKfycbwUWFfwu5LrhkhPqJSG-YMsfokwmUPECctzic8nD3-amS3N-5jXcuthmOQ1nqgoZ0Eh/exec';
@@ -370,23 +372,89 @@ export class ApiService {
 
   /**
    * POST createTransaction
+   * Validates amount strictly and maps all source/destination account aliases
+   * to guarantee zero mismatch with Google Apps Script parameter parsing.
    */
   public static async createTransaction(payload: CreateTransactionPayload): Promise<{
     success: boolean;
     transactionId?: string;
     message?: string;
   }> {
-    // Basic verification prior to transmission
-    if (payload.amount <= 0) {
-      throw new Error('Please enter an amount greater than zero.');
+    // 1. Strict Amount Validation (Section A)
+    const amountVal = validateTransactionAmount(payload.amount);
+    if (!amountVal.isValid || !amountVal.cleanAmount || amountVal.cleanAmount <= 0) {
+      throw new Error(amountVal.error || 'Please enter an amount greater than zero.');
     }
+
+    const cleanAmount = amountVal.cleanAmount;
+
+    // 2. Account Resolution & Aliases (Section B)
+    const srcAccountName = (payload.account || payload.fromAccount || payload.sourceAccount || '').trim();
+    const srcAccountId = (payload.accountId || payload.fromAccountId || payload.sourceAccountId || srcAccountName).trim();
+
+    if (!srcAccountName) {
+      throw new Error('Please select a valid account.');
+    }
+
+    let destAccountName: string | undefined = undefined;
+    let destAccountId: string | undefined = undefined;
+
     if (payload.type === 'TRANSFER') {
-      if (!payload.toAccount || payload.account === payload.toAccount) {
-        throw new Error('From Account and To Account must be different.');
+      destAccountName = (
+        payload.toAccount ||
+        payload.destinationAccount ||
+        payload.transferToAccount ||
+        payload.destination ||
+        payload.transferTo ||
+        ''
+      ).trim();
+
+      destAccountId = (
+        payload.toAccountId ||
+        payload.destinationAccountId ||
+        payload.transferToAccountId ||
+        destAccountName
+      ).trim();
+
+      if (!destAccountName) {
+        throw new Error('Select the destination account.');
+      }
+
+      if (
+        srcAccountName.toLowerCase() === destAccountName.toLowerCase() ||
+        (srcAccountId && destAccountId && srcAccountId.toLowerCase() === destAccountId.toLowerCase())
+      ) {
+        throw new Error('From Account and To Account must be different. Cannot transfer to the same account.');
       }
     }
 
-    const result: any = await this.post('createTransaction', payload);
+    // 3. Fully populate every conceivable alias for Google Apps Script
+    const comprehensivePayload: CreateTransactionPayload = {
+      ...payload,
+      amount: cleanAmount,
+      // Source account aliases
+      account: srcAccountName,
+      accountName: srcAccountName,
+      accountId: srcAccountId,
+      fromAccount: srcAccountName,
+      fromAccountId: srcAccountId,
+      sourceAccount: srcAccountName,
+      sourceAccountId: srcAccountId,
+      // Destination account aliases
+      toAccount: destAccountName,
+      toAccountId: destAccountId,
+      toAccountName: destAccountName,
+      destinationAccount: destAccountName,
+      destinationAccountId: destAccountId,
+      transferToAccount: destAccountName,
+      transferToAccountId: destAccountId,
+      transferToAccountName: destAccountName,
+      destination: destAccountName,
+      transferTo: destAccountName,
+      category: payload.type === 'TRANSFER' ? 'Transfer' : payload.category,
+    };
+
+    const result: any = await this.post('createTransaction', comprehensivePayload);
     return {
       success: true,
       transactionId: result.transactionId || result.id || result.transaction_id,
@@ -485,4 +553,124 @@ export class ApiService {
   public static async addVehicle(vehicle: Partial<Vehicle>): Promise<any> {
     return this.post('addVehicle', vehicle);
   }
+
+  // ==========================================
+  // Administrator & User Management Endpoints
+  // ==========================================
+
+  /**
+   * GET ?action=users
+   * Fetches registered administrators and workshop staff from Users sheet
+   */
+  public static async getUsers(): Promise<User[]> {
+    try {
+      const res: any = await this.get('users');
+      const rawUsers = Array.isArray(res) ? res : res.users || res.data || [];
+      return rawUsers.map((u: any) => ({
+        id: String(u.userId || u.id || u.user_id || u.username),
+        username: String(u.username || u.name || '').trim(),
+        name: String(u.fullName || u.name || u.username || '').trim(),
+        role: (String(u.role || 'STAFF').toUpperCase() === 'ADMIN' ? 'ADMIN' : String(u.role || '').toUpperCase() === 'VIEWER' ? 'VIEWER' : 'STAFF') as any,
+        pin: u.pin ? String(u.pin) : undefined,
+        phone: u.phone ? String(u.phone) : undefined,
+        email: u.email ? String(u.email) : undefined,
+        active: u.active !== false && String(u.status || '').toLowerCase() !== 'inactive',
+        createdAt: u.createdAt || u.created_at,
+        lastLoginAt: u.lastLoginAt || u.last_login,
+      }));
+    } catch (err: any) {
+      console.warn('Backend getUsers warning:', err.message);
+      return [];
+    }
+  }
+
+  /**
+   * POST addUser
+   */
+  public static async addUser(userData: {
+    username: string;
+    name: string;
+    role: 'ADMIN' | 'STAFF' | 'VIEWER';
+    pin?: string;
+    phone?: string;
+    email?: string;
+  }): Promise<{ success: boolean; id?: string; message?: string }> {
+    const payload = {
+      username: userData.username.trim(),
+      name: userData.name.trim(),
+      fullName: userData.name.trim(),
+      role: userData.role,
+      pin: userData.pin ? userData.pin.trim() : '1234',
+      phone: userData.phone?.trim() || '',
+      email: userData.email?.trim() || '',
+      active: true,
+      status: 'ACTIVE',
+    };
+    const res: any = await this.post('addUser', payload);
+    return {
+      success: true,
+      id: res?.userId || res?.id,
+      message: res?.message || 'User added successfully.',
+    };
+  }
+
+  /**
+   * POST updateUser
+   */
+  public static async updateUser(
+    id: string,
+    updates: Partial<User>
+  ): Promise<{ success: boolean; message?: string }> {
+    const payload = {
+      userId: id,
+      id,
+      ...updates,
+    };
+    const res: any = await this.post('updateUser', payload);
+    return {
+      success: true,
+      message: res?.message || 'User updated successfully.',
+    };
+  }
+
+  /**
+   * POST login
+   * Verifies user credentials on Google Apps Script backend
+   */
+  public static async loginUser(username: string, pin: string): Promise<{ success: boolean; user?: User; message?: string }> {
+    try {
+      const res: any = await this.post('login', {
+        username: username.trim(),
+        pin: pin.trim(),
+      });
+      if (res && res.success !== false && res.user) {
+        return {
+          success: true,
+          user: {
+            id: String(res.user.id || res.user.userId || res.user.username),
+            username: String(res.user.username),
+            name: String(res.user.name || res.user.fullName || res.user.username),
+            role: (String(res.user.role || 'STAFF').toUpperCase() === 'ADMIN' ? 'ADMIN' : 'STAFF') as any,
+            active: res.user.active !== false,
+          },
+          message: res.message || 'Login successful',
+        };
+      }
+      return {
+        success: false,
+        message: res?.message || res?.error || 'Invalid username or PIN.',
+      };
+    } catch (err: any) {
+      throw err;
+    }
+  }
+
+  /**
+   * GET ?action=backup
+   * Requests complete JSON backup from Google Apps Script
+   */
+  public static async exportBackup(): Promise<any> {
+    return this.get('backup');
+  }
 }
+

@@ -1,15 +1,16 @@
 import React from 'react';
-import { Account, BackendHealth, Category } from '../types/finance';
+import { Account, BackendHealth, Category, User } from '../types/finance';
 import {
   Wrench,
   Server,
   Layers,
   Tag,
-  ExternalLink,
+  Shield,
   ShieldCheck,
-  Phone,
-  MapPin,
-  Clock,
+  User as UserIcon,
+  LogOut,
+  Download,
+  Users,
 } from 'lucide-react';
 
 interface MoreViewProps {
@@ -18,6 +19,10 @@ interface MoreViewProps {
   incomeCategories: Category[];
   expenseCategories: Category[];
   onOpenBackendModal: () => void;
+  currentUser?: User | null;
+  onLogout?: () => void;
+  onOpenAdminModal?: () => void;
+  onExportBackup?: () => void;
 }
 
 export const MoreView: React.FC<MoreViewProps> = ({
@@ -26,9 +31,71 @@ export const MoreView: React.FC<MoreViewProps> = ({
   incomeCategories,
   expenseCategories,
   onOpenBackendModal,
+  currentUser,
+  onLogout,
+  onOpenAdminModal,
+  onExportBackup,
 }) => {
   return (
     <div className="space-y-4 pb-12">
+      {/* Current User Session Card */}
+      {currentUser && (
+        <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+                <UserIcon className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-slate-100 text-xs">{currentUser.name}</span>
+                  <span
+                    className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                      currentUser.role === 'ADMIN'
+                        ? 'bg-amber-500/20 text-amber-300'
+                        : 'bg-blue-500/20 text-blue-300'
+                    }`}
+                  >
+                    {currentUser.role}
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono">@{currentUser.username}</div>
+              </div>
+            </div>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-rose-950/70 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-800 text-[11px] font-semibold rounded-lg transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Log Out</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-xs">
+            <button
+              onClick={onOpenAdminModal}
+              className="py-2 px-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>User & Admin Control</span>
+            </button>
+
+            {onExportBackup && (
+              <button
+                onClick={onExportBackup}
+                className="py-2 px-3 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export Backup</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Business Header Card */}
       <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
         <div className="flex items-center gap-3">

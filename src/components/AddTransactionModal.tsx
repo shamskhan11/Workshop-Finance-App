@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Account, Category, Customer, TransactionType, Vehicle } from '../types/finance';
 import { ApiService } from '../services/apiService';
 import { PAYMENT_METHODS } from '../constants/financeDefaults';
+import { validateTransactionAmount } from '../utils/validation';
 import { AddAccountModal } from './AddAccountModal';
 import { AddCategoryModal } from './AddCategoryModal';
 import {
@@ -87,6 +88,23 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   // Track previous open state to avoid resetting form fields on account/category re-fetch
   const prevIsOpenRef = useRef(false);
 
+  // Helper to reliably find an account by ID, code, or name
+  const findAccount = (identifier: string): Account | undefined => {
+    if (!identifier) return undefined;
+    const clean = identifier.trim().toLowerCase();
+    return accounts.find(
+      (a) =>
+        (a.id && a.id.trim().toLowerCase() === clean) ||
+        (a.name && a.name.trim().toLowerCase() === clean) ||
+        (a.code && a.code.trim().toLowerCase() === clean)
+    );
+  };
+
+  // Real-time amount validation memo (Section A)
+  const amountValidation = useMemo(() => {
+    return validateTransactionAmount(amount);
+  }, [amount]);
+
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       // Modal just opened: initialize fields
@@ -103,9 +121,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
       // Default selected account ID
       if (accounts.length > 0) {
-        setSelectedAccountId(accounts[0].id || accounts[0].name);
+        const firstAcc = accounts[0].id || accounts[0].name;
+        setSelectedAccountId(firstAcc);
         if (accounts.length > 1) {
-          setToAccountId(accounts[1].id || accounts[1].name);
+          const secondAcc = accounts[1].id || accounts[1].name;
+          setToAccountId(secondAcc);
         } else {
           setToAccountId('');
         }
@@ -121,18 +141,20 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       }
     } else if (isOpen && prevIsOpenRef.current) {
       // Modal is already open and accounts list updated:
-      // If currently selected ID is missing or invalid, set fallback
       if (!selectedAccountId && accounts.length > 0) {
         setSelectedAccountId(accounts[0].id || accounts[0].name);
       }
       if (!toAccountId && accounts.length > 1) {
-        setToAccountId(accounts[1].id || accounts[1].name);
+        const candidate = accounts.find(
+          (a) => (a.id || a.name) !== selectedAccountId
+        );
+        setToAccountId(candidate ? (candidate.id || candidate.name) : accounts[1].id || accounts[1].name);
       }
     }
     prevIsOpenRef.current = isOpen;
   }, [isOpen, initialType, accounts, incomeCategories, expenseCategories]);
 
-  // Adjust default category when type tab changes
+  // Adjust default category and destination accounts when type tab changes
   const handleTypeChange = (newType: TransactionType) => {
     setType(newType);
     setErrorMessage(null);
@@ -140,8 +162,17 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       setCategory(incomeCategories[0]?.name || '');
     } else if (newType === 'OUT') {
       setCategory(expenseCategories[0]?.name || '');
-    } else {
-      setCategory(''); // Category not required for TRANSFER
+    } else if (newType === 'TRANSFER') {
+      setCategory('Transfer');
+      // Ensure source and destination accounts are distinct and populated
+      if (accounts.length > 0 && !selectedAccountId) {
+        setSelectedAccountId(accounts[0].id || accounts[0].name);
+      }
+      const curSrc = selectedAccountId || (accounts[0] ? (accounts[0].id || accounts[0].name) : '');
+      const validDest = accounts.find((a) => (a.id || a.name) !== curSrc);
+      if (validDest && (!toAccountId || toAccountId === curSrc)) {
+        setToAccountId(validDest.id || validDest.name);
+      }
     }
   };
 
@@ -155,6 +186,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     } else {
       if (target === 'account') {
         setSelectedAccountId(val);
+        // If transfer and destination is now equal to source, auto-switch destination if possible
+        if (type === 'TRANSFER' && toAccountId === val) {
+          const alternate = accounts.find((a) => (a.id || a.name) !== val);
+          if (alternate) {
+            setToAccountId(alternate.id || alternate.name);
+          }
+        }
       } else {
         setToAccountId(val);
       }
@@ -216,29 +254,35 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     e.preventDefault();
     setErrorMessage(null);
 
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      setErrorMessage('Please enter an amount greater than zero.');
+    // 1. Amount Validation (Section A)
+    const amountCheck = validateTransactionAmount(amount);
+    if (!amountCheck.isValid || !amountCheck.cleanAmount || amountCheck.cleanAmount <= 0) {
+      setErrorMessage(amountCheck.error || 'Please enter an amount strictly greater than zero.');
       return;
     }
 
-    const selectedAcc = accounts.find(
-      (a) => a.id === selectedAccountId || a.name === selectedAccountId
-    );
+    const cleanAmount = amountCheck.cleanAmount;
+
+    // 2. Account Resolution & Verification (Section B)
+    const selectedAcc = findAccount(selectedAccountId);
     if (!selectedAcc) {
       setErrorMessage('Please select a valid account.');
       return;
     }
 
-    const destAcc = accounts.find((a) => a.id === toAccountId || a.name === toAccountId);
+    let destAcc: Account | undefined = undefined;
 
     if (type === 'TRANSFER') {
+      destAcc = findAccount(toAccountId);
       if (!destAcc) {
-        setErrorMessage('Please select a destination account.');
+        setErrorMessage('Select the destination account.');
         return;
       }
-      if (selectedAcc.id === destAcc.id || selectedAcc.name === destAcc.name) {
-        setErrorMessage('From Account and To Account must be different.');
+      if (
+        selectedAcc.id === destAcc.id ||
+        selectedAcc.name.trim().toLowerCase() === destAcc.name.trim().toLowerCase()
+      ) {
+        setErrorMessage('From Account and To Account must be different. Cannot transfer money to the same account.');
         return;
       }
     } else {
@@ -254,12 +298,27 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         date,
         time,
         type,
-        amount: Math.round(parsedAmount),
+        amount: cleanAmount,
         category: type === 'TRANSFER' ? 'Transfer' : category,
+        // Source account mapping
         account: selectedAcc.name,
         accountId: selectedAcc.id,
+        accountName: selectedAcc.name,
+        fromAccount: selectedAcc.name,
+        fromAccountId: selectedAcc.id,
+        sourceAccount: selectedAcc.name,
+        sourceAccountId: selectedAcc.id,
+        // Destination account mapping
         toAccount: type === 'TRANSFER' ? destAcc?.name : undefined,
         toAccountId: type === 'TRANSFER' ? destAcc?.id : undefined,
+        toAccountName: type === 'TRANSFER' ? destAcc?.name : undefined,
+        destinationAccount: type === 'TRANSFER' ? destAcc?.name : undefined,
+        destinationAccountId: type === 'TRANSFER' ? destAcc?.id : undefined,
+        transferToAccount: type === 'TRANSFER' ? destAcc?.name : undefined,
+        transferToAccountId: type === 'TRANSFER' ? destAcc?.id : undefined,
+        transferToAccountName: type === 'TRANSFER' ? destAcc?.name : undefined,
+        destination: type === 'TRANSFER' ? destAcc?.name : undefined,
+        transferTo: type === 'TRANSFER' ? destAcc?.name : undefined,
         paymentMethod,
         customer: customer || undefined,
         vehicle: vehicle || undefined,
@@ -270,10 +329,10 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
       onSuccess(
         type === 'IN'
-          ? `Money In (PKR ${Math.round(parsedAmount).toLocaleString()}) recorded successfully.`
+          ? `Money In (PKR ${cleanAmount.toLocaleString()}) recorded successfully.`
           : type === 'OUT'
-          ? `Money Out (PKR ${Math.round(parsedAmount).toLocaleString()}) recorded successfully.`
-          : `Transfer of PKR ${Math.round(parsedAmount).toLocaleString()} from ${selectedAcc.name} to ${destAcc?.name} recorded.`
+          ? `Money Out (PKR ${cleanAmount.toLocaleString()}) recorded successfully.`
+          : `Transfer of PKR ${cleanAmount.toLocaleString()} from ${selectedAcc.name} to ${destAcc?.name} recorded.`
       );
       onClose();
     } catch (err: any) {
@@ -349,26 +408,56 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               </div>
             )}
 
-            {/* Amount Input - High Visibility */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-300">
-                Amount (PKR) <span className="text-amber-400">*</span>
-              </label>
+            {/* Amount Input - Strict Validation (Section A) */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-slate-300">
+                  Amount (PKR) <span className="text-amber-400">*</span>
+                </label>
+                {/* Live validation message directly beside the amount field */}
+                {amount.trim() === '' ? (
+                  <span className="text-[11px] text-slate-400 font-medium">Must be &gt; 0</span>
+                ) : amountValidation.isValid ? (
+                  <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    <span>Valid Amount (PKR {amountValidation.cleanAmount?.toLocaleString()})</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-rose-400 font-semibold flex items-center gap-1 animate-fadeIn">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    <span>{amountValidation.error}</span>
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
                   PKR
                 </span>
                 <input
-                  type="number"
-                  step="1"
-                  min="1"
+                  type="text"
+                  inputMode="decimal"
                   required
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[-+eE]/g, '');
+                    setAmount(val);
+                  }}
                   placeholder="0"
-                  className="w-full pl-15 pr-4 py-2.5 bg-slate-950 border border-slate-700 rounded-lg text-lg font-bold text-slate-100 focus:outline-none focus:border-amber-500 placeholder:text-slate-600"
+                  className={`w-full pl-15 pr-4 py-2.5 bg-slate-950 border rounded-lg text-lg font-bold text-slate-100 focus:outline-none placeholder:text-slate-600 transition-colors ${
+                    amount.trim() !== '' && !amountValidation.isValid
+                      ? 'border-rose-500 focus:border-rose-500 focus:ring-1 focus:ring-rose-500'
+                      : amount.trim() !== '' && amountValidation.isValid
+                      ? 'border-emerald-600 focus:border-emerald-500'
+                      : 'border-slate-700 focus:border-amber-500'
+                  }`}
                 />
               </div>
+              {amount.trim() !== '' && !amountValidation.isValid && (
+                <p className="text-[11px] text-rose-400 flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  <span>{amountValidation.error}</span>
+                </p>
+              )}
             </div>
 
             {/* Date & Time Grid */}
@@ -527,6 +616,13 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                     </option>
                   </select>
                 </div>
+
+                {selectedAccountId && toAccountId && findAccount(selectedAccountId)?.name.toLowerCase() === findAccount(toAccountId)?.name.toLowerCase() && (
+                  <div className="col-span-2 p-2 bg-rose-950/70 border border-rose-800 rounded-lg text-rose-300 text-[11px] flex items-center gap-1.5 animate-fadeIn">
+                    <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    <span>From and To accounts cannot be the same. Please select a different destination.</span>
+                  </div>
+                )}
 
                 <div className="col-span-2 text-[11px] text-indigo-300/80">
                   Transfers move money between workshop accounts without affecting Net Cash Flow.
@@ -699,7 +795,14 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={
+                  isSubmitting ||
+                  !amountValidation.isValid ||
+                  (type === 'TRANSFER' &&
+                    (!toAccountId ||
+                      findAccount(selectedAccountId)?.name.trim().toLowerCase() ===
+                        findAccount(toAccountId)?.name.trim().toLowerCase()))
+                }
                 className={`w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.99] disabled:opacity-50 ${
                   type === 'IN'
                     ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/20'

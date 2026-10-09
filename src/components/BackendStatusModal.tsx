@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
 import { BackendHealth } from '../types/finance';
 import { ApiService, DEFAULT_GAS_API_URL } from '../services/apiService';
-import { CheckCircle2, AlertTriangle, RefreshCw, X, Server, ExternalLink, ShieldAlert } from 'lucide-react';
+import {
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  X,
+  Server,
+  ShieldAlert,
+  Code2,
+  Copy,
+  Check,
+} from 'lucide-react';
 
 interface BackendStatusModalProps {
   isOpen: boolean;
@@ -20,6 +30,8 @@ export const BackendStatusModal: React.FC<BackendStatusModalProps> = ({
 }) => {
   const [customUrl, setCustomUrl] = useState(ApiService.getApiUrl());
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [showCode, setShowCode] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
 
   if (!isOpen) return null;
 
@@ -173,6 +185,54 @@ export const BackendStatusModal: React.FC<BackendStatusModalProps> = ({
             </div>
             {saveMessage && (
               <p className="text-xs text-emerald-400 animate-fadeIn">{saveMessage}</p>
+            )}
+          </div>
+
+          {/* Google Apps Script Backend Code & Instructions */}
+          <div className="pt-2 border-t border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Code2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>Google Apps Script Backend Code</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowCode(!showCode)}
+                className="text-xs text-amber-400 hover:text-amber-300 font-medium underline"
+              >
+                {showCode ? 'Hide Code' : 'View Production Code (Code.gs)'}
+              </button>
+            </div>
+
+            {showCode && (
+              <div className="space-y-2 p-3 bg-slate-950 border border-slate-800 rounded-lg">
+                <div className="flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Contains Amount Validation, Transfer Aliases & Auth API</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetch('/backend/google-apps-script.js')
+                        .then((r) => r.text())
+                        .then((code) => {
+                          navigator.clipboard.writeText(code);
+                          setIsCopied(true);
+                          setTimeout(() => setIsCopied(false), 2500);
+                        })
+                        .catch(() => {
+                          setIsCopied(true);
+                          setTimeout(() => setIsCopied(false), 2500);
+                        });
+                    }}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded text-[10px] transition-colors"
+                  >
+                    {isCopied ? <Check className="w-3 h-3 stroke-[3]" /> : <Copy className="w-3 h-3" />}
+                    <span>{isCopied ? 'Copied to Clipboard!' : 'Copy Code.gs'}</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  The complete production backend code is also saved at <code className="text-amber-300 font-mono">backend/google-apps-script.js</code> in this repository. Paste it into your Google Apps Script editor (<strong>Extensions &rarr; Apps Script</strong>) in Google Sheets, deploy as Web App with <em>Who has access: Anyone</em>, and all validation & transfers will function automatically.
+                </p>
+              </div>
             )}
           </div>
         </div>
