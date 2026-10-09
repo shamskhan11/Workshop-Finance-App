@@ -1,5 +1,5 @@
 import React from 'react';
-import { BackendHealth, User } from '../types/finance';
+import { BackendHealth, Organization, User } from '../types/finance';
 import { Wrench, RefreshCw, LogOut, Shield } from 'lucide-react';
 
 interface HeaderProps {
@@ -10,6 +10,7 @@ interface HeaderProps {
   currentUser?: User | null;
   onLogout?: () => void;
   onOpenAdminModal?: () => void;
+  org?: Organization;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,27 +21,38 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onLogout,
   onOpenAdminModal,
+  org,
 }) => {
   const isConnected = health?.connected && health?.databaseReady;
   const isAuthRequired = health?.message?.includes('Sign-In') || health?.message?.includes('authentication');
+
+  const displayName = org?.name || 'SATTAR AUTO';
+  // Compute short first word or acronym if long
+  const shortName = displayName.length > 20 ? displayName.slice(0, 18) + '...' : displayName;
 
   return (
     <header className="sticky top-0 z-30 bg-slate-900/95 backdrop-blur-md border-b border-slate-800">
       <div className="max-w-md mx-auto px-4 py-2.5 flex items-center justify-between">
         {/* Business Logo & Name */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-            <Wrench className="w-4 h-4" />
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 overflow-hidden shrink-0">
+            {org?.logoUrl ? (
+              <img src={org.logoUrl} alt={org.name} className="w-full h-full object-contain p-0.5" />
+            ) : (
+              <Wrench className="w-4 h-4" />
+            )}
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold tracking-tight text-slate-100 text-xs sm:text-sm">SATTAR AUTO</span>
-              <span className="text-[9px] uppercase font-semibold text-amber-400 bg-amber-400/10 px-1 py-0.2 rounded">
-                PKR
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-bold tracking-tight text-slate-100 text-xs sm:text-sm truncate max-w-[140px] uppercase">
+                {shortName}
+              </span>
+              <span className="text-[9px] uppercase font-semibold text-amber-400 bg-amber-400/10 px-1 py-0.2 rounded shrink-0">
+                {org?.currency || 'PKR'}
               </span>
             </div>
-            <div className="text-[10px] text-slate-400 tracking-tight leading-none">
-              Mobile & Electrical
+            <div className="text-[10px] text-slate-400 tracking-tight leading-none truncate max-w-[140px]">
+              {org?.address || 'Workshop Finance'}
             </div>
           </div>
         </div>

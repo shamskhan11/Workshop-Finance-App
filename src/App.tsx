@@ -10,6 +10,7 @@ import {
   BackendHealth,
   Category,
   Customer,
+  Organization,
   PeriodFilter,
   Transaction,
   TransactionType,
@@ -18,6 +19,7 @@ import {
 } from './types/finance';
 import { ApiService } from './services/apiService';
 import { AuthService } from './services/authService';
+import { OrgService, DEFAULT_SATTAR_ORG } from './services/orgService';
 import {
   calculateAccountBalances,
   calculateTotals,
@@ -39,6 +41,7 @@ import { MoreView } from './components/MoreView';
 import { AddTransactionModal } from './components/AddTransactionModal';
 import { BackendStatusModal } from './components/BackendStatusModal';
 import { LoginView } from './components/LoginView';
+import { OrgSetupWizard } from './components/OrgSetupWizard';
 import { AdminManagementModal } from './components/AdminManagementModal';
 import { CheckCircle2, ShieldAlert } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
@@ -46,6 +49,15 @@ import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 
 export default function App() {
+  // Feature 2: Organization setup state
+  const [hasConfiguredOrg, setHasConfiguredOrg] = useState<boolean>(() => {
+    return OrgService.hasConfiguredOrg();
+  });
+  const [activeOrg, setActiveOrg] = useState<Organization>(() => {
+    return OrgService.getActiveOrg();
+  });
+  const [isEditingOrgWizard, setIsEditingOrgWizard] = useState<boolean>(false);
+
   // Authentication & Current User State (Section C)
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     return AuthService.getCurrentSession()?.user || null;
@@ -303,10 +315,29 @@ export default function App() {
     return [...incomeCategories, ...expenseCategories];
   }, [incomeCategories, expenseCategories]);
 
+  // Feature 2: First-launch organization setup wizard (BEFORE login screen)
+  if (!hasConfiguredOrg || isEditingOrgWizard) {
+    return (
+      <OrgSetupWizard
+        initialOrg={activeOrg}
+        isEditing={isEditingOrgWizard}
+        onCancel={() => setIsEditingOrgWizard(false)}
+        onSetupComplete={(newOrg) => {
+          setActiveOrg(newOrg);
+          setHasConfiguredOrg(true);
+          setIsEditingOrgWizard(false);
+          showToast(`Organization "${newOrg.name}" configured successfully.`);
+        }}
+      />
+    );
+  }
+
   // Enforce secure authentication gate: Do not expose financial data to unauthenticated users (Section C)
   if (!currentUser) {
     return (
       <LoginView
+        org={activeOrg}
+        onOpenOrgSetup={() => setIsEditingOrgWizard(true)}
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           showToast(`Welcome back, ${user.name}`);
@@ -334,6 +365,7 @@ export default function App() {
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenAdminModal={() => setIsAdminModalOpen(true)}
+        org={activeOrg}
       />
 
       {/* PWA Install Banner */}
@@ -411,6 +443,7 @@ export default function App() {
             vehicles={vehicles}
             onSelectTransaction={(t) => setSelectedTransaction(t)}
             onShowToast={showToast}
+            org={activeOrg}
           />
         )}
 
@@ -425,6 +458,8 @@ export default function App() {
             onLogout={handleLogout}
             onOpenAdminModal={() => setIsAdminModalOpen(true)}
             onExportBackup={handleExportBackup}
+            org={activeOrg}
+            onOpenOrgSettings={() => setIsEditingOrgWizard(true)}
           />
         )}
       </main>
@@ -467,6 +502,9 @@ export default function App() {
         onClose={() => setIsAdminModalOpen(false)}
         currentUser={currentUser}
         onShowToast={showToast}
+        org={activeOrg}
+        onRefreshAccounts={refreshAccounts}
+        onRefreshCategories={refreshCategories}
         allFinancialData={{
           accounts: computedAccounts,
           transactions,

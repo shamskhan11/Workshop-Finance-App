@@ -1,5 +1,5 @@
 import React from 'react';
-import { Account, BackendHealth, Category, User } from '../types/finance';
+import { Account, BackendHealth, Category, Organization, User } from '../types/finance';
 import {
   Wrench,
   Server,
@@ -11,6 +11,11 @@ import {
   LogOut,
   Download,
   Users,
+  Building2,
+  Edit,
+  Phone,
+  MapPin,
+  Mail,
 } from 'lucide-react';
 
 interface MoreViewProps {
@@ -23,6 +28,8 @@ interface MoreViewProps {
   onLogout?: () => void;
   onOpenAdminModal?: () => void;
   onExportBackup?: () => void;
+  org?: Organization;
+  onOpenOrgSettings?: () => void;
 }
 
 export const MoreView: React.FC<MoreViewProps> = ({
@@ -35,7 +42,11 @@ export const MoreView: React.FC<MoreViewProps> = ({
   onLogout,
   onOpenAdminModal,
   onExportBackup,
+  org,
+  onOpenOrgSettings,
 }) => {
+  const isAdmin = currentUser?.role === 'ADMIN';
+
   return (
     <div className="space-y-4 pb-12">
       {/* Current User Session Card */}
@@ -80,7 +91,7 @@ export const MoreView: React.FC<MoreViewProps> = ({
               className="py-2 px-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>User & Admin Control</span>
+              <span>Admin Management</span>
             </button>
 
             {onExportBackup && (
@@ -96,28 +107,66 @@ export const MoreView: React.FC<MoreViewProps> = ({
         </div>
       )}
 
-      {/* Business Header Card */}
+      {/* Workshop / Organization Profile Card */}
       <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-            <Wrench className="w-5 h-5" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 overflow-hidden shrink-0 p-1">
+              {org?.logoUrl ? (
+                <img src={org.logoUrl} alt={org.name} className="w-full h-full object-contain" />
+              ) : (
+                <Building2 className="w-5 h-5" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-bold text-slate-100 text-sm truncate uppercase">
+                {org?.name || 'SATTAR AUTO MOBILE & ELECTRICAL SERVICES'}
+              </h2>
+              <p className="text-xs text-slate-400">Automobile Workshop Financial Operations</p>
+            </div>
           </div>
-          <div>
-            <h2 className="font-bold text-slate-100 text-sm">
-              SATTAR AUTO MOBILE & ELECTRICAL SERVICES
-            </h2>
-            <p className="text-xs text-slate-400">Workshop Financial Operations Management</p>
-          </div>
+
+          {isAdmin && onOpenOrgSettings && (
+            <button
+              onClick={onOpenOrgSettings}
+              className="p-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg border border-slate-700 transition-colors"
+              title="Edit Workshop Organization Details"
+            >
+              <Edit className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {/* Address & Phone details */}
+        <div className="space-y-1 pt-2 border-t border-slate-800/80 text-xs text-slate-300">
+          {org?.address && (
+            <div className="flex items-start gap-2 text-[11px] text-slate-400">
+              <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+              <span>{org.address}</span>
+            </div>
+          )}
+          {org?.phone && (
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <Phone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <span>{org.phone}</span>
+            </div>
+          )}
+          {org?.email && (
+            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+              <Mail className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <span>{org.email}</span>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-xs">
           <div>
             <span className="text-slate-500 block text-[10px] uppercase">Base Currency</span>
-            <span className="font-bold text-slate-200">PKR (Pakistani Rupee)</span>
+            <span className="font-bold text-slate-200">{org?.currency || 'PKR (Pakistani Rupee)'}</span>
           </div>
           <div>
             <span className="text-slate-500 block text-[10px] uppercase">Operational Timezone</span>
-            <span className="font-bold text-slate-200">Asia/Karachi</span>
+            <span className="font-bold text-slate-200">{org?.timezone || 'Asia/Karachi'}</span>
           </div>
         </div>
       </div>

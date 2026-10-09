@@ -22,6 +22,30 @@ export type PeriodFilter =
   | 'this_year' 
   | 'custom';
 
+export interface Organization {
+  id: string; // Stable UUID or Org code, e.g. ORG-SATTAR-01
+  name: string;
+  address: string;
+  phone: string;
+  email?: string;
+  logoUrl?: string; // base64 or URL
+  currency: string; // 'PKR'
+  timezone: string; // 'Asia/Karachi'
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  details: string;
+  userId?: string;
+  userName?: string;
+  userRole?: string;
+  orgId?: string;
+  timestamp: string;
+}
+
 export interface Account {
   id: string;
   name: string;
@@ -31,6 +55,7 @@ export interface Account {
   currentBalance?: number;
   notes?: string;
   active?: boolean;
+  orgId?: string;
 }
 
 export interface Category {
@@ -40,6 +65,7 @@ export interface Category {
   code?: string;
   description?: string;
   active?: boolean;
+  orgId?: string;
 }
 
 export interface Customer {
@@ -49,6 +75,7 @@ export interface Customer {
   address?: string;
   notes?: string;
   active?: boolean;
+  orgId?: string;
 }
 
 export interface Vehicle {
@@ -62,6 +89,7 @@ export interface Vehicle {
   engineNumber?: string;
   notes?: string;
   active?: boolean;
+  orgId?: string;
 }
 
 export interface Transaction {
@@ -88,6 +116,9 @@ export interface Transaction {
   createdAt?: string;
   voidReason?: string;
   voidedAt?: string;
+  orgId?: string;
+  createdByUser?: string;
+  createdByRole?: string;
 }
 
 export interface CategorySummary {
@@ -157,6 +188,7 @@ export interface CreateTransactionPayload {
   description?: string;
   createdByUser?: string;
   createdByRole?: string;
+  orgId?: string;
 }
 
 export type UserRole = 'ADMIN' | 'STAFF' | 'VIEWER';
@@ -170,6 +202,7 @@ export interface User {
   phone?: string;
   email?: string;
   active: boolean;
+  orgId?: string;
   createdAt?: string;
   lastLoginAt?: string;
 }
@@ -178,6 +211,7 @@ export interface AuthSession {
   user: User;
   token: string;
   loginTime: string;
+  orgId?: string;
 }
 
 export interface AmountValidationResult {

@@ -507,6 +507,50 @@ export class ApiService {
   }
 
   /**
+   * POST updateAccount
+   */
+  public static async updateAccount(
+    accountId: string,
+    updates: Partial<Account> & { orgId?: string; adminUser?: string }
+  ): Promise<{ success: boolean; message?: string }> {
+    const payload = {
+      accountId,
+      id: accountId,
+      account_id: accountId,
+      ...updates,
+      name: updates.name ? updates.name.trim() : undefined,
+      accountName: updates.name ? updates.name.trim() : undefined,
+    };
+    const res: any = await this.post('updateAccount', payload);
+    return {
+      success: true,
+      message: res?.message || 'Account updated successfully.',
+    };
+  }
+
+  /**
+   * POST deleteAccount
+   */
+  public static async deleteAccount(
+    accountId: string,
+    options?: { hardDelete?: boolean; orgId?: string; adminUser?: string }
+  ): Promise<{ success: boolean; message?: string }> {
+    const payload = {
+      accountId,
+      id: accountId,
+      account_id: accountId,
+      hardDelete: options?.hardDelete ?? false,
+      orgId: options?.orgId,
+      user: options?.adminUser,
+    };
+    const res: any = await this.post('deleteAccount', payload);
+    return {
+      success: true,
+      message: res?.message || 'Account deactivated or removed successfully.',
+    };
+  }
+
+  /**
    * POST addCategory
    */
   public static async addCategory(category: {
@@ -537,6 +581,50 @@ export class ApiService {
         (isExpense
           ? 'Expense category added successfully.'
           : 'Category added successfully.'),
+    };
+  }
+
+  /**
+   * POST updateCategory
+   */
+  public static async updateCategory(
+    categoryId: string,
+    updates: Partial<Category> & { orgId?: string; adminUser?: string }
+  ): Promise<{ success: boolean; message?: string }> {
+    const payload = {
+      categoryId,
+      id: categoryId,
+      category_id: categoryId,
+      ...updates,
+      name: updates.name ? updates.name.trim() : undefined,
+      categoryName: updates.name ? updates.name.trim() : undefined,
+    };
+    const res: any = await this.post('updateCategory', payload);
+    return {
+      success: true,
+      message: res?.message || 'Category updated successfully.',
+    };
+  }
+
+  /**
+   * POST deleteCategory
+   */
+  public static async deleteCategory(
+    categoryId: string,
+    options?: { hardDelete?: boolean; orgId?: string; adminUser?: string }
+  ): Promise<{ success: boolean; message?: string }> {
+    const payload = {
+      categoryId,
+      id: categoryId,
+      category_id: categoryId,
+      hardDelete: options?.hardDelete ?? false,
+      orgId: options?.orgId,
+      user: options?.adminUser,
+    };
+    const res: any = await this.post('deleteCategory', payload);
+    return {
+      success: true,
+      message: res?.message || 'Category deactivated or removed successfully.',
     };
   }
 

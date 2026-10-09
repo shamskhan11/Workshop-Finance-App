@@ -107,8 +107,20 @@ function doPost(e) {
       case 'addAccount':
         responseData = handleAddAccount(data);
         break;
+      case 'updateAccount':
+        responseData = handleUpdateAccount(data);
+        break;
+      case 'deleteAccount':
+        responseData = handleDeleteAccount(data);
+        break;
       case 'addCategory':
         responseData = handleAddCategory(data);
+        break;
+      case 'updateCategory':
+        responseData = handleUpdateCategory(data);
+        break;
+      case 'deleteCategory':
+        responseData = handleDeleteCategory(data);
         break;
       case 'addUser':
         responseData = handleAddUser(data);
@@ -311,6 +323,101 @@ function handleAddAccount(data) {
 }
 
 /**
+ * Handle Update Account (name, type, notes, active)
+ */
+function handleUpdateAccount(data) {
+  const accId = String(data.accountId || data.id || data.account_id || '').trim();
+  if (!accId) return { success: false, error: 'Account ID is required.' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.ACCOUNTS);
+  if (!sheet) return { success: false, error: 'Accounts sheet not found.' };
+
+  const rows = sheet.getDataRange().getValues();
+  let foundRow = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === accId || String(rows[i][1]).trim().toLowerCase() === accId.toLowerCase()) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+
+  if (foundRow === -1) return { success: false, error: 'Account not found: ' + accId };
+
+  if (data.name) sheet.getRange(foundRow, 2).setValue(String(data.name).trim());
+  if (data.type) sheet.getRange(foundRow, 3).setValue(String(data.type).trim());
+  if (data.notes !== undefined) sheet.getRange(foundRow, 5).setValue(String(data.notes).trim());
+  if (data.active !== undefined) sheet.getRange(foundRow, 6).setValue(Boolean(data.active));
+
+  logAudit('UPDATE_ACCOUNT', `Updated account: ${accId}` + (data.active !== undefined ? ` (active: ${data.active})` : ''), data.user || 'ADMIN');
+
+  return { success: true, message: 'Account updated successfully.' };
+}
+
+/**
+ * Handle Delete Account (safeguarded against transactions)
+ */
+function handleDeleteAccount(data) {
+  const accId = String(data.accountId || data.id || data.account_id || '').trim();
+  if (!accId) return { success: false, error: 'Account ID is required.' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.ACCOUNTS);
+  const txSheet = ss.getSheetByName(CONFIG.SHEETS.TRANSACTIONS);
+
+  if (!sheet) return { success: false, error: 'Accounts sheet not found.' };
+
+  const rows = sheet.getDataRange().getValues();
+  let foundRow = -1;
+  let accName = '';
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === accId || String(rows[i][1]).trim().toLowerCase() === accId.toLowerCase()) {
+      foundRow = i + 1;
+      accName = String(rows[i][1]).trim();
+      break;
+    }
+  }
+
+  if (foundRow === -1) return { success: false, error: 'Account not found: ' + accId };
+
+  // Check if transactions reference this account
+  let txCount = 0;
+  if (txSheet) {
+    const txRows = txSheet.getDataRange().getValues();
+    for (let t = 1; t < txRows.length; t++) {
+      const src = String(txRows[t][6] || '').trim().toLowerCase();
+      const dest = String(txRows[t][7] || '').trim().toLowerCase();
+      if (src === accName.toLowerCase() || dest === accName.toLowerCase()) {
+        txCount++;
+      }
+    }
+  }
+
+  // If referenced, do NOT hard delete; deactivate safely instead
+  if (txCount > 0) {
+    sheet.getRange(foundRow, 6).setValue(false);
+    logAudit('DEACTIVATE_ACCOUNT', `Deactivated referenced account ${accName} (${txCount} transactions)`, data.user || 'ADMIN');
+    return {
+      success: true,
+      deactivated: true,
+      message: `Account "${accName}" is referenced by ${txCount} transaction(s). It has been deactivated safely rather than permanently deleted.`,
+    };
+  }
+
+  if (data.hardDelete) {
+    sheet.deleteRow(foundRow);
+    logAudit('DELETE_ACCOUNT', `Permanently deleted account ${accName} (0 transactions)`, data.user || 'ADMIN');
+    return { success: true, message: `Account "${accName}" deleted permanently.` };
+  } else {
+    sheet.getRange(foundRow, 6).setValue(false);
+    logAudit('DEACTIVATE_ACCOUNT', `Deactivated account ${accName}`, data.user || 'ADMIN');
+    return { success: true, deactivated: true, message: `Account "${accName}" deactivated.` };
+  }
+}
+
+/**
  * Handle Add Category
  */
 function handleAddCategory(data) {
@@ -336,6 +443,100 @@ function handleAddCategory(data) {
   logAudit('ADD_CATEGORY', `Added category: ${name} (${type})`, data.user || 'API');
 
   return { success: true, categoryId: catId, name: name, message: 'Category added successfully.' };
+}
+
+/**
+ * Handle Update Category
+ */
+function handleUpdateCategory(data) {
+  const catId = String(data.categoryId || data.id || data.category_id || '').trim();
+  if (!catId) return { success: false, error: 'Category ID is required.' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.CATEGORIES);
+  if (!sheet) return { success: false, error: 'Categories sheet not found.' };
+
+  const rows = sheet.getDataRange().getValues();
+  let foundRow = -1;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === catId || String(rows[i][1]).trim().toLowerCase() === catId.toLowerCase()) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+
+  if (foundRow === -1) return { success: false, error: 'Category not found: ' + catId };
+
+  if (data.name) sheet.getRange(foundRow, 2).setValue(String(data.name).trim());
+  if (data.type) sheet.getRange(foundRow, 3).setValue(String(data.type).toUpperCase());
+  if (data.code !== undefined) sheet.getRange(foundRow, 4).setValue(String(data.code).trim());
+  if (data.description !== undefined) sheet.getRange(foundRow, 5).setValue(String(data.description).trim());
+  if (data.active !== undefined) sheet.getRange(foundRow, 6).setValue(Boolean(data.active));
+
+  logAudit('UPDATE_CATEGORY', `Updated category: ${catId}` + (data.active !== undefined ? ` (active: ${data.active})` : ''), data.user || 'ADMIN');
+
+  return { success: true, message: 'Category updated successfully.' };
+}
+
+/**
+ * Handle Delete Category (safeguarded against transactions)
+ */
+function handleDeleteCategory(data) {
+  const catId = String(data.categoryId || data.id || data.category_id || '').trim();
+  if (!catId) return { success: false, error: 'Category ID is required.' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.CATEGORIES);
+  const txSheet = ss.getSheetByName(CONFIG.SHEETS.TRANSACTIONS);
+
+  if (!sheet) return { success: false, error: 'Categories sheet not found.' };
+
+  const rows = sheet.getDataRange().getValues();
+  let foundRow = -1;
+  let catName = '';
+
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === catId || String(rows[i][1]).trim().toLowerCase() === catId.toLowerCase()) {
+      foundRow = i + 1;
+      catName = String(rows[i][1]).trim();
+      break;
+    }
+  }
+
+  if (foundRow === -1) return { success: false, error: 'Category not found: ' + catId };
+
+  // Check if transactions reference this category
+  let txCount = 0;
+  if (txSheet) {
+    const txRows = txSheet.getDataRange().getValues();
+    for (let t = 1; t < txRows.length; t++) {
+      const tCat = String(txRows[t][4] || '').trim().toLowerCase();
+      if (tCat === catName.toLowerCase()) {
+        txCount++;
+      }
+    }
+  }
+
+  if (txCount > 0) {
+    sheet.getRange(foundRow, 6).setValue(false);
+    logAudit('DEACTIVATE_CATEGORY', `Deactivated referenced category ${catName} (${txCount} transactions)`, data.user || 'ADMIN');
+    return {
+      success: true,
+      deactivated: true,
+      message: `Category "${catName}" is referenced by ${txCount} transaction(s). It has been deactivated safely rather than permanently deleted.`,
+    };
+  }
+
+  if (data.hardDelete) {
+    sheet.deleteRow(foundRow);
+    logAudit('DELETE_CATEGORY', `Permanently deleted category ${catName} (0 transactions)`, data.user || 'ADMIN');
+    return { success: true, message: `Category "${catName}" deleted permanently.` };
+  } else {
+    sheet.getRange(foundRow, 6).setValue(false);
+    logAudit('DEACTIVATE_CATEGORY', `Deactivated category ${catName}`, data.user || 'ADMIN');
+    return { success: true, deactivated: true, message: `Category "${catName}" deactivated.` };
+  }
 }
 
 /**

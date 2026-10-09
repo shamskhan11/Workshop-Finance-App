@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Account, Category, Customer, PeriodFilter, Transaction, Vehicle } from '../types/finance';
+import { Account, Category, Customer, Organization, PeriodFilter, Transaction, Vehicle } from '../types/finance';
 import { formatPKR, formatDate, calculateTotals, filterTransactionsByPeriod } from '../utils/accounting';
 import { exportFinancialReportPDF } from '../utils/pdfReport';
 import {
@@ -28,6 +28,7 @@ interface ReportsViewProps {
   vehicles: Vehicle[];
   onSelectTransaction: (t: Transaction) => void;
   onShowToast?: (msg: string) => void;
+  org?: Organization;
 }
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
@@ -36,6 +37,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   categories,
   onSelectTransaction,
   onShowToast,
+  org,
 }) => {
   const [period, setPeriod] = useState<PeriodFilter>('this_month');
   const [customStart, setCustomStart] = useState<string>('');
@@ -141,8 +143,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         incomeByCategory: totals.incomeByCategory,
         expensesByCategory: totals.expensesByCategory,
         transactions: reportTransactions,
-        businessName: 'SATTAR AUTO MOBILE & ELECTRICAL SERVICES',
-        currency: 'PKR',
+        businessName: org?.name || 'SATTAR AUTO MOBILE & ELECTRICAL SERVICES',
+        businessAddress: org?.address,
+        businessPhone: org?.phone,
+        businessEmail: org?.email,
+        logoUrl: org?.logoUrl,
+        currency: org?.currency || 'PKR',
       });
 
       setExportFeedback({ type: 'success', message: result.message });

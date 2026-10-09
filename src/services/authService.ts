@@ -83,7 +83,7 @@ export class AuthService {
   /**
    * Attempt user login
    */
-  public static async login(usernameInput: string, pinInput: string): Promise<User> {
+  public static async login(usernameInput: string, pinInput: string, orgId?: string): Promise<User> {
     const username = usernameInput.trim().toLowerCase();
     const pin = pinInput.trim();
 
@@ -98,8 +98,11 @@ export class AuthService {
     try {
       const backendRes = await ApiService.loginUser(username, pin);
       if (backendRes.success && backendRes.user) {
-        const authenticatedUser = backendRes.user;
-        this.createSession(authenticatedUser);
+        const authenticatedUser = {
+          ...backendRes.user,
+          orgId: orgId || backendRes.user.orgId,
+        };
+        this.createSession(authenticatedUser, orgId);
         return authenticatedUser;
       }
     } catch {
@@ -123,19 +126,20 @@ export class AuthService {
     // Update last login
     const updatedUser: User = {
       ...matchedUser,
+      orgId: orgId || matchedUser.orgId,
       lastLoginAt: new Date().toISOString(),
     };
     const updatedList = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
     this.saveUsers(updatedList);
 
-    this.createSession(updatedUser);
+    this.createSession(updatedUser, orgId);
     return updatedUser;
   }
 
   /**
    * Save session token
    */
-  private static createSession(user: User): AuthSession {
+  private static createSession(user: User, orgId?: string): AuthSession {
     const session: AuthSession = {
       user: {
         id: user.id,
@@ -147,9 +151,11 @@ export class AuthService {
         active: user.active,
         createdAt: user.createdAt,
         lastLoginAt: user.lastLoginAt,
+        orgId: orgId || user.orgId,
       },
       token: `token_${user.id}_${Date.now()}`,
       loginTime: new Date().toISOString(),
+      orgId: orgId || user.orgId,
     };
 
     if (typeof window !== 'undefined') {

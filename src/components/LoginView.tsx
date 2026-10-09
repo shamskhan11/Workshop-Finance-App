@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from '../types/finance';
+import { Organization, User } from '../types/finance';
 import { AuthService } from '../services/authService';
 import {
   Wrench,
@@ -10,13 +10,20 @@ import {
   Loader2,
   ShieldCheck,
   Sparkles,
+  Settings,
 } from 'lucide-react';
 
 interface LoginViewProps {
   onLoginSuccess: (user: User) => void;
+  org: Organization;
+  onOpenOrgSetup?: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
+export const LoginView: React.FC<LoginViewProps> = ({
+  onLoginSuccess,
+  org,
+  onOpenOrgSetup,
+}) => {
   const [username, setUsername] = useState('admin');
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,7 +44,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
     try {
       setIsLoading(true);
-      const user = await AuthService.login(username, pin);
+      const user = await AuthService.login(username, pin, org.id);
       onLoginSuccess(user);
     } catch (err: any) {
       setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
@@ -57,18 +64,26 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div className="w-full max-w-sm space-y-6 animate-fadeIn">
         {/* Branding & Logo */}
         <div className="text-center space-y-3">
-          <div className="inline-flex w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 items-center justify-center text-amber-400 shadow-xl shadow-amber-500/5 mb-1">
-            <Wrench className="w-8 h-8" />
+          <div className="inline-flex w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 items-center justify-center text-amber-400 shadow-xl shadow-amber-500/5 mb-1 overflow-hidden p-1">
+            {org.logoUrl ? (
+              <img
+                src={org.logoUrl}
+                alt={org.name}
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <Wrench className="w-8 h-8" />
+            )}
           </div>
           <div>
             <h1 className="text-xl font-black tracking-tight text-slate-100 uppercase">
-              SATTAR AUTO
+              {org.name}
             </h1>
             <p className="text-xs text-amber-400 font-semibold tracking-wide uppercase mt-0.5">
-              Mobile & Electrical Services
+              Automobile Workshop Finance & Cash Flow
             </p>
-            <p className="text-[11px] text-slate-400 mt-1">
-              Workshop Finance & Cash Flow System
+            <p className="text-[11px] text-slate-400 mt-1 max-w-[280px] mx-auto truncate">
+              {org.address}
             </p>
           </div>
         </div>
@@ -172,10 +187,22 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </div>
         </div>
 
-        {/* Protection Notice */}
-        <p className="text-[11px] text-center text-slate-500 leading-relaxed px-4">
-          Financial records and cash flows are protected. Login is required before accessing workshop accounts.
-        </p>
+          {/* Protection Notice & Switch/Edit Org */}
+          <div className="space-y-2 text-center px-4">
+            {onOpenOrgSetup && (
+              <button
+                type="button"
+                onClick={onOpenOrgSetup}
+                className="inline-flex items-center gap-1.5 text-[11px] text-amber-400/90 hover:text-amber-300 transition-colors"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>Configure or Switch Workshop Organization</span>
+              </button>
+            )}
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Financial records and cash flows are protected. Login is required before accessing workshop accounts.
+            </p>
+          </div>
       </div>
     </div>
   );

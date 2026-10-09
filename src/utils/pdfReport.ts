@@ -59,6 +59,10 @@ export interface PDFReportOptions {
   }[];
   transactions: Transaction[];
   businessName?: string;
+  businessAddress?: string;
+  businessPhone?: string;
+  businessEmail?: string;
+  logoUrl?: string;
   currency?: string;
 }
 
@@ -74,6 +78,10 @@ export async function exportFinancialReportPDF(options: PDFReportOptions): Promi
     expensesByCategory,
     transactions,
     businessName = 'SATTAR AUTO MOBILE & ELECTRICAL SERVICES',
+    businessAddress,
+    businessPhone,
+    businessEmail,
+    logoUrl,
     currency = 'PKR',
   } = options;
 
@@ -106,39 +114,67 @@ export async function exportFinancialReportPDF(options: PDFReportOptions): Promi
   }).format(now);
 
   // 1. Header Banner & Branding
-  // Dark slate header bar
+  // Increase header height slightly if address/contact provided
+  const headerHeight = businessAddress || businessPhone ? 32 : 28;
   doc.setFillColor(15, 23, 42); // slate-900
-  doc.rect(0, 0, pageWidth, 28, 'F');
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
 
   // Gold accent stripe
   doc.setFillColor(217, 119, 6); // amber-600
-  doc.rect(0, 28, pageWidth, 2, 'F');
+  doc.rect(0, headerHeight, pageWidth, 2, 'F');
+
+  // Optional Logo rendering
+  let textStartX = marginX;
+  if (logoUrl) {
+    try {
+      // Draw logo in left corner (14mm x 14mm)
+      doc.addImage(logoUrl, 'PNG', marginX, 6, 16, 16);
+      textStartX = marginX + 19;
+    } catch (e) {
+      // Fallback if image format not supported by jsPDF
+      console.warn('Could not render logo in PDF:', e);
+    }
+  }
 
   // Business Name
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(businessName.toUpperCase(), marginX, 12);
+  doc.setFontSize(13);
+  doc.text(businessName.toUpperCase(), textStartX, 11);
 
   // Subtitle
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(251, 191, 36); // amber-400
-  doc.text('FINANCIAL REPORT & CASH FLOW AUDIT', marginX, 19);
+  doc.text('FINANCIAL REPORT & CASH FLOW AUDIT', textStartX, 17);
 
+  // Workshop Address & Contact Number
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7);
   doc.setTextColor(148, 163, 184); // slate-400
-  doc.text('Mobile-First Workshop Financial Operations · Single Source of Truth', marginX, 24);
+  const contactLine = [
+    businessAddress,
+    businessPhone ? `Tel: ${businessPhone}` : '',
+    businessEmail ? `Email: ${businessEmail}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  doc.text(
+    contactLine || 'Mobile-First Workshop Financial Operations · Single Source of Truth',
+    textStartX,
+    22,
+    { maxWidth: 105 }
+  );
 
   // Generated metadata on right side of header
   doc.setTextColor(226, 232, 240);
   doc.setFontSize(7.5);
-  doc.text(`Generated: ${generatedDateStr} at ${generatedTimeStr}`, pageWidth - marginX, 13, { align: 'right' });
-  doc.text(`Operational Timezone: Asia/Karachi`, pageWidth - marginX, 18, { align: 'right' });
-  doc.text(`Base Currency: ${currency}`, pageWidth - marginX, 23, { align: 'right' });
+  doc.text(`Generated: ${generatedDateStr} at ${generatedTimeStr}`, pageWidth - marginX, 11, { align: 'right' });
+  doc.text(`Operational Timezone: Asia/Karachi`, pageWidth - marginX, 16, { align: 'right' });
+  doc.text(`Base Currency: ${currency}`, pageWidth - marginX, 21, { align: 'right' });
 
-  let currentY = 36;
+  let currentY = headerHeight + 6;
 
   // 2. Report Parameters & Active Filters Box
   doc.setFillColor(248, 250, 252); // slate-50
