@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#090d16"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="accentGradMask" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+    <filter id="shadowMask" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Full bleed Background for maskable icon -->
+  <rect width="512" height="512" fill="url(#bgGradMask)"/>
+
+  <!-- Safe Zone content: scaled and centered inside 400x400 safe area (central 80%) -->
+  <g transform="translate(56, 56) scale(0.78)" filter="url(#shadowMask)">
+    <!-- Hexagon Container -->
+    <path d="M 256 90 L 390 160 L 390 320 L 256 400 L 122 320 L 122 160 Z" fill="#1e293b" stroke="#334155" stroke-width="4"/>
+    
+    <!-- Wrench Tool (Auto Mechanic) -->
+    <path d="M 230 190 C 218 178 200 174 186 182 C 172 190 166 206 170 220 L 202 252 L 284 334 C 290 340 300 340 306 334 L 322 318 C 328 312 328 302 322 296 L 240 214 L 252 202 C 266 206 282 200 290 186 C 298 172 294 154 282 142 C 274 134 262 130 252 134 L 236 150 L 222 150 L 222 164 L 238 180 C 234 184 232 187 230 190 Z" 
+          fill="url(#accentGradMask)" />
+
+    <!-- Electrical Bolt (Electrical Services) -->
+    <path d="M 276 170 L 230 250 L 266 250 L 236 342 L 310 242 L 274 242 Z" 
+          fill="#ffffff" opacity="0.95"/>
+    
+    <!-- Cash / Rupee Currency Symbol (Finance) -->
+    <circle cx="340" cy="330" r="42" fill="#0f172a" stroke="url(#accentGradMask)" stroke-width="4"/>
+    <text x="340" y="342" font-family="Arial, Helvetica, sans-serif" font-weight="900" font-size="34" fill="#fbbf24" text-anchor="middle">₨</text>
+
+    <!-- Typography initials / tag -->
+    <text x="256" y="445" font-family="'Plus Jakarta Sans', Arial, sans-serif" font-weight="800" font-size="28" fill="#e2e8f0" letter-spacing="4" text-anchor="middle">SATTAR FINANCE</text>
+  </g>
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "Sattar Auto Mobile & Electrical Services",
+  "description": "Mobile-first finance and cash flow management for Sattar Auto Mobile & Electrical Services.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

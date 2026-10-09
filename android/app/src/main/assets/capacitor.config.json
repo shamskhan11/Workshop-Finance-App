@@ -1,0 +1,12 @@
+{
+	"appId": "com.sattarauto.finance",
+	"appName": "Sattar Auto Finance",
+	"webDir": "dist",
+	"server": {
+		"androidScheme": "https",
+		"cleartext": true
+	},
+	"android": {
+		"allowMixedContent": true
+	}
+}
